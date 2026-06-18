@@ -4,6 +4,7 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import load_model
 import numpy as np
 import os
+import requests
 from PIL import Image
 
 # =========================================================
@@ -11,15 +12,39 @@ from PIL import Image
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
-MODEL_PATH = "https://drive.google.com/file/d/1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5/view?usp=drive_link"  # Sesuaikan dengan lokasi model Anda
+# Path lokal tempat menyimpan model setelah diunduh
+LOCAL_MODEL_PATH = "model_pet_cnn.keras"
+
+# URL download langsung (Direct Link) untuk Google Drive Anda
+# Catatan: Struktur URL diubah dari '/view?usp=...' menjadi '/uc?export=download&id=...'
+DRIVE_MODEL_URL = "https://docs.google.com/uc?export=download&id=1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5"
+
 IMG_SIZE = (277, 277)
 
 @st.cache_resource
 def load_cnn_model():
-    """Fungsi untuk memuat model dengan cache agar tidak di-load berulang kali"""
-    if os.path.exists(MODEL_PATH):
-        return load_model(MODEL_PATH)
-    else:
+    """Fungsi untuk mengunduh model dari Drive jika belum ada, lalu memuatnya dengan cache"""
+    # 1. Cek apakah file sudah diunduh sebelumnya secara lokal
+    if not os.path.exists(LOCAL_MODEL_PATH):
+        with st.spinner("⏳ Mengunduh file model dari Google Drive... Harap tunggu beberapa saat."):
+            try:
+                response = requests.get(DRIVE_MODEL_URL, stream=True)
+                response.raise_for_status()  # Memastikan tidak ada error HTTP
+                
+                with open(LOCAL_MODEL_PATH, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                st.success("✅ Model berhasil diunduh!")
+            except Exception as e:
+                st.error(f"❌ Gagal mengunduh model dari Google Drive: {e}")
+                return None
+                
+    # 2. Jika file sudah ada di lokal, muat ke dalam aplikasi
+    try:
+        return load_model(LOCAL_MODEL_PATH)
+    except Exception as e:
+        st.error(f"❌ Gagal memuat file model: {e}")
         return None
 
 # Load model
@@ -32,7 +57,7 @@ st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing")
 st.write("Unggah gambar kucing atau anjing untuk mengetahui hasil prediksi beserta tingkat keyakinannya (confidence).")
 
 if model is None:
-    st.error(f"❌ File model `{MODEL_PATH}` tidak ditemukan! Harap latih model terlebih dahulu atau pastikan file berada di direktori yang sama dengan `app.py`.")
+    st.error(f"❌ Model tidak dapat dimuat. Pastikan tautan Google Drive Anda valid dan diatur ke status 'Siapa saja yang memiliki link dapat melihat' (Public Access).")
 else:
     # Komponen Unggah Gambar
     uploaded_file = st.file_uploader("Pilih gambar...", type=["jpg", "jpeg", "png"])
