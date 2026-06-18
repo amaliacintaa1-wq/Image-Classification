@@ -16,7 +16,7 @@ MODEL_PATH = "model_pet_cnn.keras"
 IMG_SIZE = (277, 277)
 
 # TODO: Ganti teks di bawah ini dengan ID file Google Drive kamu
-DRIVE_FILE_ID = "MASUKKAN_ID_FILE_DRIVE_KAMU_DI_SINI" 
+DRIVE_FILE_ID = "1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5" 
 
 @st.cache_resource
 def load_cnn_model():
