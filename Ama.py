@@ -30,29 +30,29 @@ interpreter = load_tflite_model()
 # ANTARMUKA PENGGUNA (UI)
 # =========================================================
 st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite)")
-st.write("Aplikasi telah disesuaikan agar otomatis mengikuti dimensi model Anda.")
+st.write("Aplikasi ini menggunakan model TFLite yang disesuaikan dengan arsitektur pelatihan Anda.")
 
 if interpreter is None:
     st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda!")
 else:
-    # Mengambil detail input otomatis dari model yang Anda buat
+    # Mengambil detail input otomatis dari model
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
     
-    # Mendapatkan ukuran target asli (misal: 277x277) langsung dari model
-    input_shape = input_details[0]['shape']  # Biasanya [1, 277, 277, 3]
+    # Mendapatkan ukuran target asli (277, 277) dari model Anda
+    input_shape = input_details[0]['shape']  # [1, 277, 277, 3]
     target_height = input_shape[1]
     target_width = input_shape[2]
 
     uploaded_file = st.file_uploader("Pilih gambar...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        img_display = Image.open(uploaded_file)
+        img_display = Image.open(uploaded_file).convert('RGB')
         st.image(img_display, caption="Gambar yang Diunggah", use_container_width=True)
         st.write("⏳ Sedang memproses...")
 
         try:
-            # 1. Preprocessing Gambar disesuaikan dengan dimensi model secara dinamis
+            # 1. Preprocessing Gambar (Resize sesuai target model)
             img_resized = img_display.resize((target_width, target_height))
             img_array = np.array(img_resized, dtype=np.float32)
             
@@ -66,17 +66,20 @@ else:
             interpreter.set_tensor(input_details[0]['index'], img_tensor)
             interpreter.invoke()
             
+            # Mengambil hasil akhir dan mengubahnya ke array 1 dimensi
             prediction = interpreter.get_tensor(output_details[0]['index'])
-            confidence = prediction[0][0]
+            confidence = float(np.squeeze(prediction)) # Mengubah [[val]] menjadi val (float biasa)
 
-            # 3. Tampilkan Hasil
+            # 3. Tampilkan Hasil Klasifikasi sesuai kamus label notebook Anda ({'cat': 0, 'dog': 1})
             st.subheader("📊 Hasil Prediksi:")
             if confidence > 0.5:
+                # Nilai mendekati 1 artinya DOG (Anjing) sesuai training
                 st.success(f"### **Prediksi : ANJING (DOG)**")
                 st.info(f"**Confidence : {confidence * 100:.2f}%**")
             else:
+                # Nilai mendekati 0 artinya CAT (Kucing) sesuai training
                 st.success(f"### **Prediksi : KUCING (CAT)**")
-                st.info(f"**Confidence : {(1 - confidence) * 100:.2f}%**")
+                st.info(f"**Confidence : {(1.0 - confidence) * 100:.2f}%**")
                 
         except Exception as e:
-            st.error(f"Terjadi kesalahan shape/tipe data saat prediksi: {e}")
+            st.error(f"Terjadi kesalahan saat memproses data/prediksi: {e}")
