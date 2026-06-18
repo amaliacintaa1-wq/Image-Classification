@@ -1,5 +1,0 @@
-# Core dependencies for the Streamlit Dog vs Cat Classification App
-streamlit
-tensorflow
-pillow
-numpy
