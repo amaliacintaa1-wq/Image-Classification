@@ -22,7 +22,7 @@ def load_cnn_model():
     if not os.path.exists(MODEL_PATH):
         with st.spinner("Mengunduh file model .h5 dari cloud... Mohon tunggu sebentar..."):
             # ⚠️ GANTI TEKS DI BAWAH INI DENGAN ID FILE GOOGLE DRIVE KAMU YANG BARU (.h5)
-            DRIVE_ID = "1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5/" 
+            DRIVE_ID = "1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5" 
             
             URL = f"https://docs.google.com/uc?export=download&id={DRIVE_ID}"
             try:
