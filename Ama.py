@@ -11,7 +11,7 @@ from PIL import Image
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
-MODEL_PATH = "model_pet_cnn.keras"  # Sesuaikan dengan lokasi model Anda
+MODEL_PATH = "https://drive.google.com/file/d/1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5/view?usp=drive_link"  # Sesuaikan dengan lokasi model Anda
 IMG_SIZE = (277, 277)
 
 @st.cache_resource
