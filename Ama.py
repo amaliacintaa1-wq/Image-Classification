@@ -8,16 +8,13 @@ from PIL import Image
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
-# Menggunakan model tflite yang jauh lebih ringan untuk server cloud
 MODEL_PATH = "model_pet_cnn.tflite"
-IMG_SIZE = (277, 277)
 
 @st.cache_resource
 def load_tflite_model():
-    """Memuat TFLite Runtime Interpreter secara lokal"""
+    """Memuat TFLite Runtime Interpreter dengan aman"""
     if os.path.exists(MODEL_PATH):
         try:
-            # Import tflite runtime di dalam fungsi agar menghemat memori saat startup
             import tensorflow as tf
             interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
             interpreter.allocate_tensors()
@@ -33,11 +30,20 @@ interpreter = load_tflite_model()
 # ANTARMUKA PENGGUNA (UI)
 # =========================================================
 st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite)")
-st.write("Aplikasi ini menggunakan model terkompresi agar berjalan lancar di server cloud.")
+st.write("Aplikasi telah disesuaikan agar otomatis mengikuti dimensi model Anda.")
 
 if interpreter is None:
     st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda!")
 else:
+    # Mengambil detail input otomatis dari model yang Anda buat
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    
+    # Mendapatkan ukuran target asli (misal: 277x277) langsung dari model
+    input_shape = input_details[0]['shape']  # Biasanya [1, 277, 277, 3]
+    target_height = input_shape[1]
+    target_width = input_shape[2]
+
     uploaded_file = st.file_uploader("Pilih gambar...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
@@ -46,17 +52,18 @@ else:
         st.write("⏳ Sedang memproses...")
 
         try:
-            # 1. Preprocessing Gambar secara manual (tanpa fungsi tf.keras.preprocessing)
-            img_resized = img_display.resize(IMG_SIZE)
+            # 1. Preprocessing Gambar disesuaikan dengan dimensi model secara dinamis
+            img_resized = img_display.resize((target_width, target_height))
             img_array = np.array(img_resized, dtype=np.float32)
-            img_array = img_array / 255.0  # Normalisasi
-            img_array = np.expand_dims(img_array, axis=0)  # Tambah dimensi batch
+            
+            # Normalisasi 1./255 seperti pada training notebook Anda
+            img_array = img_array / 255.0  
+            
+            # Menambahkan dimensi batch agar shape menjadi [1, H, W, C]
+            img_tensor = np.expand_dims(img_array, axis=0)
 
-            # 2. Jalankan Prediksi menggunakan TFLite Interpreter
-            input_details = interpreter.get_input_details()
-            output_details = interpreter.get_output_details()
-
-            interpreter.set_tensor(input_details[0]['index'], img_array)
+            # 2. Jalankan Prediksi
+            interpreter.set_tensor(input_details[0]['index'], img_tensor)
             interpreter.invoke()
             
             prediction = interpreter.get_tensor(output_details[0]['index'])
@@ -72,4 +79,4 @@ else:
                 st.info(f"**Confidence : {(1 - confidence) * 100:.2f}%**")
                 
         except Exception as e:
-            st.error(f"Terjadi kesalahan saat memproses gambar: {e}")
+            st.error(f"Terjadi kesalahan shape/tipe data saat prediksi: {e}")
