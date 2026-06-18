@@ -2,9 +2,10 @@ import streamlit as st
 import numpy as np
 import os
 from PIL import Image
+import tflite_runtime.interpreter as tflite
 
 # =========================================================
-# KONFIGURASI HALAMAN & MODEL LITE
+# KONFIGURASI HALAMAN & MODEL LITE (ULTRA LIGHTWEIGHT)
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
@@ -12,11 +13,11 @@ MODEL_PATH = "model_pet_cnn.tflite"
 
 @st.cache_resource
 def load_tflite_model():
-    """Memuat TFLite Runtime Interpreter dengan aman"""
+    """Memuat TFLite Runtime Interpreter tanpa library TensorFlow utuh"""
     if os.path.exists(MODEL_PATH):
         try:
-            import tensorflow as tf
-            interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+            # Memakai tflite_runtime yang sangat hemat RAM
+            interpreter = tflite.Interpreter(model_path=MODEL_PATH)
             interpreter.allocate_tensors()
             return interpreter
         except Exception as e:
@@ -29,8 +30,8 @@ interpreter = load_tflite_model()
 # =========================================================
 # ANTARMUKA PENGGUNA (UI)
 # =========================================================
-st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite)")
-st.write("Aplikasi ini menggunakan model TFLite yang disesuaikan dengan arsitektur pelatihan Anda.")
+st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite Runtime)")
+st.write("Aplikasi menggunakan tflite-runtime agar super ringan dan anti-crash di server cloud.")
 
 if interpreter is None:
     st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda!")
@@ -66,18 +67,16 @@ else:
             interpreter.set_tensor(input_details[0]['index'], img_tensor)
             interpreter.invoke()
             
-            # Mengambil hasil akhir dan mengubahnya ke array 1 dimensi
+            # Mengambil hasil akhir dan mengubahnya ke float desimal tunggal
             prediction = interpreter.get_tensor(output_details[0]['index'])
-            confidence = float(np.squeeze(prediction)) # Mengubah [[val]] menjadi val (float biasa)
+            confidence = float(np.squeeze(prediction))
 
-            # 3. Tampilkan Hasil Klasifikasi sesuai kamus label notebook Anda ({'cat': 0, 'dog': 1})
+            # 3. Tampilkan Hasil Klasifikasi sesuai indeks ({'cat': 0, 'dog': 1})
             st.subheader("📊 Hasil Prediksi:")
             if confidence > 0.5:
-                # Nilai mendekati 1 artinya DOG (Anjing) sesuai training
                 st.success(f"### **Prediksi : ANJING (DOG)**")
                 st.info(f"**Confidence : {confidence * 100:.2f}%**")
             else:
-                # Nilai mendekati 0 artinya CAT (Kucing) sesuai training
                 st.success(f"### **Prediksi : KUCING (CAT)**")
                 st.info(f"**Confidence : {(1.0 - confidence) * 100:.2f}%**")
                 
