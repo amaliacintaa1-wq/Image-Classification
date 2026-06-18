@@ -5,7 +5,19 @@ from tensorflow.keras.models import load_model
 import numpy as np
 import os
 from PIL import Image
-import gdown  # Digunakan untuk mendownload file dari Google Drive
+import gdown
+
+# =========================================================
+# TRIK BYPASS ERROR DESERIALISASI (UNTUK VERSI TENSORFLOW JADUL)
+# =========================================================
+# Fungsi ini memaksa Keras mengabaikan parameter quantization_config yang bikin crash
+from tensorflow.keras.utils import register_keras_serializable
+
+@register_keras_serializable(package="Custom")
+class CustomDense(tf.keras.layers.Dense):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop('quantization_config', None)  # Hapus parameter penyebab error
+        super().__init__(*args, **kwargs)
 
 # =========================================================
 # KONFIGURASI HALAMAN & MODEL
@@ -15,12 +27,12 @@ st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout
 MODEL_PATH = "model_pet_cnn.keras"
 IMG_SIZE = (277, 277)
 
-# TODO: Ganti teks di bawah ini dengan ID file Google Drive kamu
+# Ganti teks di bawah ini dengan ID file Google Drive kamu
 DRIVE_FILE_ID = "1EyqQzeh3nK0jlQ8y3ej2Is1EP3S4PNz5" 
 
 @st.cache_resource
 def load_cnn_model():
-    """Fungsi mendownload model dari Drive (jika belum ada) dan memuatnya"""
+    """Fungsi mendownload model dari Drive dan memuatnya menggunakan Custom Objects"""
     if not os.path.exists(MODEL_PATH):
         with st.spinner("📥 Mendownload file model dari Google Drive (ini hanya dilakukan sekali)..."):
             url = f"https://drive.google.com/uc?id={DRIVE_FILE_ID}"
@@ -32,7 +44,8 @@ def load_cnn_model():
                 
     if os.path.exists(MODEL_PATH):
         try:
-            return load_model(MODEL_PATH)
+            # Muat model dengan menyisipkan CustomDense untuk menggantikan layer Dense bawaan yang error
+            return load_model(MODEL_PATH, custom_objects={'Dense': CustomDense})
         except Exception as e:
             st.error(f"❌ Gagal memuat file model: {e}")
             return None
