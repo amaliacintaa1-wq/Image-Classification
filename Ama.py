@@ -1,68 +1,69 @@
 import streamlit as st
-import tensorflow as tf
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.models import load_model
 import numpy as np
 import os
 from PIL import Image
 
 # =========================================================
-# KONFIGURASI HALAMAN & MODEL
+# KONFIGURASI HALAMAN & MODEL LITE
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
-# Model dibaca langsung secara lokal dari folder repository GitHub Anda
-MODEL_PATH = "model_pet_cnn.keras"
+# Menggunakan model tflite yang jauh lebih ringan untuk server cloud
+MODEL_PATH = "model_pet_cnn.tflite"
 IMG_SIZE = (277, 277)
 
 @st.cache_resource
-def load_cnn_model():
-    """Fungsi mendeteksi dan memuat model lokal di server Streamlit"""
+def load_tflite_model():
+    """Memuat TFLite Runtime Interpreter secara lokal"""
     if os.path.exists(MODEL_PATH):
         try:
-            return load_model(MODEL_PATH)
+            # Import tflite runtime di dalam fungsi agar menghemat memori saat startup
+            import tensorflow as tf
+            interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+            interpreter.allocate_tensors()
+            return interpreter
         except Exception as e:
-            st.error(f"❌ Gagal memuat file model lokal: {e}")
+            st.error(f"❌ Gagal memuat file TFLite: {e}")
             return None
-    else:
-        return None
+    return None
 
-# Load model
-model = load_cnn_model()
+interpreter = load_tflite_model()
 
 # =========================================================
 # ANTARMUKA PENGGUNA (UI)
 # =========================================================
-st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing")
-st.write("Unggah gambar kucing atau anjing untuk mengetahui hasil prediksi beserta tingkat keyakinannya (confidence).")
+st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite)")
+st.write("Aplikasi ini menggunakan model terkompresi agar berjalan lancar di server cloud.")
 
-if model is None:
-    st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda! Pastikan file model sudah di-upload menggunakan Git LFS.")
+if interpreter is None:
+    st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda!")
 else:
-    # Komponen Unggah Gambar
     uploaded_file = st.file_uploader("Pilih gambar...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        # Menampilkan gambar yang diunggah
         img_display = Image.open(uploaded_file)
         st.image(img_display, caption="Gambar yang Diunggah", use_container_width=True)
-        
-        st.write("⏳ Sedang memproses dan memprediksi...")
+        st.write("⏳ Sedang memproses...")
 
         try:
-            # Preprocessing Gambar sesuai dengan spesifikasi model
+            # 1. Preprocessing Gambar secara manual (tanpa fungsi tf.keras.preprocessing)
             img_resized = img_display.resize(IMG_SIZE)
-            img_array = image.img_to_array(img_resized)
-            img_array = img_array / 255.0
-            img_array = np.expand_dims(img_array, axis=0)
+            img_array = np.array(img_resized, dtype=np.float32)
+            img_array = img_array / 255.0  # Normalisasi
+            img_array = np.expand_dims(img_array, axis=0)  # Tambah dimensi batch
 
-            # Melakukan Prediksi
-            prediction = model.predict(img_array)
+            # 2. Jalankan Prediksi menggunakan TFLite Interpreter
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+
+            interpreter.set_tensor(input_details[0]['index'], img_array)
+            interpreter.invoke()
+            
+            prediction = interpreter.get_tensor(output_details[0]['index'])
             confidence = prediction[0][0]
 
-            # Menampilkan Hasil Klasifikasi
+            # 3. Tampilkan Hasil
             st.subheader("📊 Hasil Prediksi:")
-            
             if confidence > 0.5:
                 st.success(f"### **Prediksi : ANJING (DOG)**")
                 st.info(f"**Confidence : {confidence * 100:.2f}%**")
