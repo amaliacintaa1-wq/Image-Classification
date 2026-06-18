@@ -1,84 +1,78 @@
 import streamlit as st
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.models import load_model
 import numpy as np
 import os
 from PIL import Image
-import tflite_runtime.interpreter as tflite
 
 # =========================================================
-# KONFIGURASI HALAMAN & MODEL LITE (ULTRA LIGHTWEIGHT)
+# KONFIGURASI HALAMAN & MODEL
 # =========================================================
 st.set_page_config(page_title="Klasifikasi Dog vs Cat", page_icon="🐾", layout="centered")
 
-MODEL_PATH = "model_pet_cnn.tflite"
+MODEL_PATH = "model_pet_cnn.keras"  # Sesuaikan dengan lokasi model Anda
+IMG_SIZE = (277, 277)
 
 @st.cache_resource
-def load_tflite_model():
-    """Memuat TFLite Runtime Interpreter tanpa library TensorFlow utuh"""
+def load_cnn_model():
+    """Fungsi untuk memuat model dengan cache agar tidak di-load berulang kali"""
     if os.path.exists(MODEL_PATH):
-        try:
-            # Memakai tflite_runtime yang sangat hemat RAM
-            interpreter = tflite.Interpreter(model_path=MODEL_PATH)
-            interpreter.allocate_tensors()
-            return interpreter
-        except Exception as e:
-            st.error(f"❌ Gagal memuat file TFLite: {e}")
-            return None
-    return None
+        return load_model(MODEL_PATH)
+    else:
+        return None
 
-interpreter = load_tflite_model()
+# Load model
+model = load_cnn_model()
 
 # =========================================================
 # ANTARMUKA PENGGUNA (UI)
 # =========================================================
-st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing (Lite Runtime)")
-st.write("Aplikasi menggunakan tflite-runtime agar super ringan dan anti-crash di server cloud.")
+st.title("🐾 Klasifikasi Gambar: Kucing vs Anjing")
+st.write("Unggah gambar kucing atau anjing untuk mengetahui hasil prediksi beserta tingkat keyakinannya (confidence).")
 
-if interpreter is None:
-    st.error(f"❌ File `{MODEL_PATH}` tidak ditemukan di repositori GitHub Anda!")
+if model is None:
+    st.error(f"❌ File model `{MODEL_PATH}` tidak ditemukan! Harap latih model terlebih dahulu atau pastikan file berada di direktori yang sama dengan `Ama.py`.")
 else:
-    # Mengambil detail input otomatis dari model
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    
-    # Mendapatkan ukuran target asli (277, 277) dari model Anda
-    input_shape = input_details[0]['shape']  # [1, 277, 277, 3]
-    target_height = input_shape[1]
-    target_width = input_shape[2]
-
+    # Komponen Unggah Gambar
     uploaded_file = st.file_uploader("Pilih gambar...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        img_display = Image.open(uploaded_file).convert('RGB')
+        # Menampilkan gambar yang diunggah
+        img_display = Image.open(uploaded_file)
         st.image(img_display, caption="Gambar yang Diunggah", use_container_width=True)
-        st.write("⏳ Sedang memproses...")
-
-        try:
-            # 1. Preprocessing Gambar (Resize sesuai target model)
-            img_resized = img_display.resize((target_width, target_height))
-            img_array = np.array(img_resized, dtype=np.float32)
-            
-            # Normalisasi 1./255 seperti pada training notebook Anda
-            img_array = img_array / 255.0  
-            
-            # Menambahkan dimensi batch agar shape menjadi [1, H, W, C]
-            img_tensor = np.expand_dims(img_array, axis=0)
-
-            # 2. Jalankan Prediksi
-            interpreter.set_tensor(input_details[0]['index'], img_tensor)
-            interpreter.invoke()
-            
-            # Mengambil hasil akhir dan mengubahnya ke float desimal tunggal
-            prediction = interpreter.get_tensor(output_details[0]['index'])
-            confidence = float(np.squeeze(prediction))
-
-            # 3. Tampilkan Hasil Klasifikasi sesuai indeks ({'cat': 0, 'dog': 1})
-            st.subheader("📊 Hasil Prediksi:")
-            if confidence > 0.5:
-                st.success(f"### **Prediksi : ANJING (DOG)**")
-                st.info(f"**Confidence : {confidence * 100:.2f}%**")
-            else:
-                st.success(f"### **Prediksi : KUCING (CAT)**")
-                st.info(f"**Confidence : {(1.0 - confidence) * 100:.2f}%**")
+        
+        # Menggunakan st.spinner agar transisi visual lebih halus dan profesional
+        with st.spinner("⏳ Sedang memproses dan memprediksi..."):
+            try:
+                # Preprocessing Gambar sesuai dengan spesifikasi model
+                # 1. Konversi ke RGB untuk mengantisipasi gambar PNG transparan (RGBA)
+                img_rgb = img_display.convert('RGB')
                 
-        except Exception as e:
-            st.error(f"Terjadi kesalahan saat memproses data/prediksi: {e}")
+                # 2. Resize ke 277x277
+                img_resized = img_rgb.resize(IMG_SIZE)
+                
+                # 3. Konversi ke array & normalisasi (rescale 1./255)
+                img_array = image.img_to_array(img_resized)
+                img_array = img_array / 255.0
+                
+                # 4. Menambahkan dimensi batch (expand dims)
+                img_array = np.expand_dims(img_array, axis=0)
+
+                # Melakukan Prediksi
+                prediction = model.predict(img_array)
+                confidence = prediction[0][0]
+
+                # Menampilkan Hasil Klasifikasi
+                st.subheader("📊 Hasil Prediksi:")
+                
+                # Asumsi: output model mendekati 1 untuk Anjing dan 0 untuk Kucing
+                if confidence > 0.5:
+                    st.success("### **Prediksi : ANJING (DOG)**")
+                    st.info(f"**Confidence : {confidence * 100:.2f}%**")
+                else:
+                    st.success("### **Prediksi : KUCING (CAT)**")
+                    st.info(f"**Confidence : {(1 - confidence) * 100:.2f}%**")
+                    
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat memproses gambar: {e}")
